@@ -1,0 +1,173 @@
+package dao;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+
+import util.AvaliacaoAmbiente;
+import util.Restaurante;
+import util.Cliente;
+import bd.ConnectionFactory;
+
+public class AvaliacaoAmbienteDAO implements BaseDAO {
+
+    @Override
+    public void salvar(Object obj) {
+        if (obj instanceof AvaliacaoAmbiente) {
+            AvaliacaoAmbiente avaliacao = (AvaliacaoAmbiente) obj;
+            String sql = "INSERT INTO avaliacao_ambiente (nota_ambiente, fk_restaurante, fk_cliente) VALUES (?, ?, ?)";
+
+            try (Connection conn = ConnectionFactory.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+
+                stmt.setFloat(1, avaliacao.getNotaAmbiente());
+                stmt.setInt(2, avaliacao.getRestaurante().getIdrestaurante());
+                stmt.setInt(3, avaliacao.getCliente().getIdcliente());
+
+                int affectedRows = stmt.executeUpdate();
+
+                if (affectedRows > 0) {
+                    try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                        if (generatedKeys.next()) {
+                            avaliacao.setIdAvaliacao(generatedKeys.getInt(1));
+                            System.out.println("Avaliação salva (ID: " + avaliacao.getIdAvaliacao() + ")");
+                        } else {
+                            System.err.println("Não foi possível obter o ID.");
+                        }
+                    }
+                } else {
+                    System.err.println("Nenhuma linha foi alterada");
+                }
+
+            } catch (SQLException e) {
+                System.err.println("Erro ao salvar Avaliação: " + e.getMessage());
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("O objeto não é uma instância de AvaliacaoAmbiente. Não salvo no banco de dados.");
+        }
+    }
+    @Override
+    public Object buscarPorId(int id) {
+        String sql = "SELECT id_avaliacao_ambiente, nota_ambiente, fk_restaurante, fk_cliente FROM avaliacao_ambiente WHERE id_avaliacao_ambiente = ?";
+        AvaliacaoAmbiente avaliacao = null;
+        try (Connection conn = ConnectionFactory.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    int idRestaurante = rs.getInt("fk_restaurante");
+                    int idCliente = rs.getInt("fk_cliente");
+
+                    RestauranteDAO restauranteDAO = new RestauranteDAO();
+                    ClienteDAO clienteDAO = new ClienteDAO();
+
+                    Restaurante restaurante = (Restaurante) restauranteDAO.buscarPorId(idRestaurante);
+                    Cliente cliente = (Cliente) clienteDAO.buscarPorId(idCliente);
+
+                    avaliacao = new AvaliacaoAmbiente(
+                            rs.getInt("id_avaliacao_ambiente"),
+                            rs.getFloat("nota_ambiente"),
+                            restaurante,
+                            cliente
+                    );
+                    System.out.println("Avaliação: ID " + avaliacao.getIdAvaliacao());
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Não foi possível encontrar: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return avaliacao;
+    }
+
+    @Override
+    public ArrayList<Object> listarTodosLazyLoading() {
+        return listarTodosEagerLoading();
+    }
+
+    @Override
+    public ArrayList<Object> listarTodosEagerLoading() {
+        ArrayList<Object> avaliacoes = new ArrayList<>();
+        String sql = "SELECT id_avaliacao_ambiente, nota_ambiente, fk_restaurante, fk_cliente FROM avaliacao_ambiente";
+
+        try (Connection conn = ConnectionFactory.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                int idRestaurante = rs.getInt("fk_restaurante");
+                int idCliente = rs.getInt("fk_cliente");
+
+                RestauranteDAO restauranteDAO = new RestauranteDAO();
+                ClienteDAO clienteDAO = new ClienteDAO();
+
+                Restaurante restaurante = (Restaurante) restauranteDAO.buscarPorId(idRestaurante);
+                Cliente cliente = (Cliente) clienteDAO.buscarPorId(idCliente);
+
+                AvaliacaoAmbiente avaliacao = new AvaliacaoAmbiente(
+                        rs.getInt("id_avaliacao_ambiente"),
+                        rs.getFloat("nota_ambiente"),
+                        restaurante,
+                        cliente
+                );
+                avaliacoes.add(avaliacao);
+            }
+        } catch (SQLException e) {
+            System.err.println("Não foi possível listar: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return avaliacoes;
+    }
+
+    @Override
+    public void atualizar(Object obj) {
+        if (obj instanceof AvaliacaoAmbiente) {
+            AvaliacaoAmbiente avaliacao = (AvaliacaoAmbiente) obj;
+            String sql = "UPDATE avaliacao_ambiente SET nota_ambiente = ?, fk_restaurante = ?, fk_cliente = ? WHERE id_avaliacao_ambiente = ?";
+
+            try (Connection conn = ConnectionFactory.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setFloat(1, avaliacao.getNotaAmbiente());
+                stmt.setInt(2, avaliacao.getRestaurante().getIdrestaurante());
+                stmt.setInt(3, avaliacao.getCliente().getIdcliente());
+                stmt.setInt(4, avaliacao.getIdAvaliacao());
+
+                int affectedRows = stmt.executeUpdate();
+                if (affectedRows > 0) {
+                    System.out.println("Avaliação de Ambiente, ID " + avaliacao.getIdAvaliacao() + " atualizada.");
+                } else {
+                    System.out.println("Avaliação de Ambiente, ID " + avaliacao.getIdAvaliacao() + " não foi encontrada.");
+                }
+            } catch (SQLException e) {
+                System.err.println("Não foi possível atualizar: " + e.getMessage());
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("Não é possivel atualizar pois o objeto não é uma instância de AvaliacaoAmbiente.");
+        }
+    }
+
+    @Override
+    public void excluir(int id) {
+        String sql = "DELETE FROM avaliacao_ambiente WHERE id_avaliacao_ambiente = ?";
+        try (Connection conn = ConnectionFactory.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, id);
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows > 0) {
+                System.out.println("Avaliação de Ambiente,ID " + id + " excluída.");
+            } else {
+                System.out.println("Avaliação de Ambiente, ID " + id + " não foi encontrada.");
+            }
+        } catch (SQLException e) {
+            System.err.println("Não foi possível excluir: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
